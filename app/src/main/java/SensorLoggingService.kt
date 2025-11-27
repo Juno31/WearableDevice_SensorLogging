@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -41,6 +42,9 @@ class SensorLoggingService : Service(), SensorEventListener {
         private const val NOTIFICATION_CHANNEL_ID = "sensor_logging_channel"
         private const val NOTIFICATION_ID = 1001
     }
+
+    // ---- WakeLock ----
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // ---- SensorManager 기반 센서 ----
     private var sensorManager: SensorManager? = null
@@ -284,6 +288,13 @@ class SensorLoggingService : Service(), SensorEventListener {
     private fun startLogging() {
         if (isLogging) return
 
+        // ★ WakeLock 획득
+        Log.d(TAG, "Acquiring WakeLock...")
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SensorLogger::WakeLock")
+        wakeLock?.setReferenceCounted(false)
+        wakeLock?.acquire()
+
         isLogging = true
         registerSystemSensors()
 
@@ -295,6 +306,13 @@ class SensorLoggingService : Service(), SensorEventListener {
 
         isLogging = false
         unregisterSystemSensors()
+
+        // ★ WakeLock 해제
+        if (wakeLock?.isHeld == true) {
+            Log.d(TAG, "Releasing WakeLock...")
+            wakeLock?.release()
+            wakeLock = null
+        }
 
         Log.d(TAG, "Final log file saved at: ${logFile.absolutePath}")
         Log.d(TAG, "Logging stopped")
